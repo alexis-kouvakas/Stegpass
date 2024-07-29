@@ -6,7 +6,7 @@ import typer
 from typing_extensions import Annotated
 from pysqlcipher3 import dbapi2 as sqlite
 from getpass import getpass
-
+from argon2 import PasswordHasher
 app = typer.Typer()
 
 @app.command()
@@ -18,11 +18,25 @@ def connect(vault_path: Annotated[str, typer.Argument()] = "vault.db"):    # Con
 
     if new_vault:
         print("Vault does not exist. Creating a new vault.")
-        vault_key = getpass("Enter a new vault key:\n")
+        vault_key = getpass("Enter a new master password:\n")
+
+        ph = PasswordHasher()
+        key_hash = ph.hash(vault_key).encode('utf-8')
+        with open('hashes.bin', "wb") as file:
+            file.write(key_hash)
+        cursor.execute(f"PRAGMA key = '{vault_key}'")
     else:
         vault_key = getpass("Password:\n")
+        with open('hashes.bin', "rb") as file:
+           hashed_password = file.read()
+        try:
+            ph = PasswordHasher()
+            ph.verify(hashed_password, vault_key)
+            cursor.execute(f"PRAGMA key = '{vault_key}'")
+        except Exception as e:
+            print(e)
+            exit()
 
-    cursor.execute(f"PRAGMA key = '{vault_key}'")
 
     cursor.execute(
         "CREATE TABLE IF NOT EXISTS passwords (vault_id text, username text, password text)"
