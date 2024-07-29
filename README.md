@@ -1,2 +1,2 @@
 # Stegpass
-A lightweight and straightforward encrypted password manager, featuring database steganography for enhanced security. Ideal for users seeking a secure and efficient way to manage passwords on Linux systems.
+A lightweight and straightforward encrypted password manager, featuring database steganography for enhanced security. Ideal for users seeking a secure, stylish and simple way to manage passwords on Linux systems.
