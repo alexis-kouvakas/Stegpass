@@ -1,4 +1,4 @@
-# Pypass
+# Stegpass
 
 A lightweight and straightforward SQLCipher-encrypted password manager and generator. Ideal for users seeking a secure, stylish and simple tool to manage passwords via the Linux terminal.
 
