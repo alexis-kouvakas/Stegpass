@@ -13,8 +13,7 @@ A lightweight and straightforward SQLCipher-encrypted steganographic password ma
       GNU General Public License for more details.
     
 ## Work in Progress!
-Steganography features highly experimental!
-
+Everything is still highly experimental, don't actually use this.
 
 ## Example usage
 
