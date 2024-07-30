@@ -1,6 +1,6 @@
 # Stegpass
 
-A lightweight and straightforward SQLCipher-encrypted steganographic password manager and generator. Ideal for users seeking a secure, stylish and simple tool to manage passwords via the Linux terminal.
+A lightweight and straightforward SQLCipher-encrypted steganographic password manager and generator. Essentially lets you store and manage your passwords inside pictures for enhanced securiy. Ideal for users seeking a secure, stylish and simple tool to manage passwords via the Linux terminal.
 
       This program is free software: you can redistribute it and/or modify
       it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@ A lightweight and straightforward SQLCipher-encrypted steganographic password ma
       GNU General Public License for more details.
     
 ## Work in Progress!
-Steganography features yet to be implemented, at the moment it is just a command-line based SQLCipher password manager.
+Steganography features highly experimental!
 
 
 ## Example usage
