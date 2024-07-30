@@ -209,42 +209,42 @@ def save_pwd(vault_id, password, vault_path, vault_key):
             print("Invalid input. Please enter 'y' or 'n'.")
             save_pwd(password, vault_id)
 
-    def steghide(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
-        cmd = ['steghide', command]
+def steghide(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
+    cmd = ['steghide', command]
 
-        if input_file:
-            cmd.extend(['-cf', input_file])
-        if output_file:
-            cmd.extend(['-of', output_file])
-        if password:
-            cmd.extend(['-p', password])
+    if input_file:
+        cmd.extend(['-cf', input_file])
+    if output_file:
+        cmd.extend(['-of', output_file])
+    if password:
+        cmd.extend(['-p', password])
 
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            stdout = result.stdout
-            stderr = result.stderr
-        except subprocess.CalledProcessError as e:
-            stdout = e.stdout
-            stderr = e.stderr
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        stdout = result.stdout
+        stderr = result.stderr
+    except subprocess.CalledProcessError as e:
+        stdout = e.stdout
+        stderr = e.stderr
 
-        return stdout, stderr
+    return stdout, stderr
 
-    def embed(vault_key, vault_path):
-        output, error = run_steghide_command('embed', input_file=vault_path, output_file=carrier_file,
-                                            password=vault_key)
-        print("Embed Output:", output)
-        print("Embed Error:", error)
+def embed(vault_key, vault_path):
+    output, error = run_steghide_command('embed', input_file=vault_path, output_file=carrier_file,
+                                        password=vault_key)
+    print("Embed Output:", output)
+    print("Embed Error:", error)
 
-    def extract(vault_key, vault_path)
-        output, error = run_steghide_command('extract', input_file=vault_path, output_file='vault.db',
-                                             password=vault_key)
-        print("Extract Output:", output)
-        print("Extract Error:", error)
+def extract(vault_key, vault_path):
+    output, error = run_steghide_command('extract', input_file=vault_path, output_file='vault.db',
+                                        password=vault_key)
+    print("Extract Output:", output)
+    print("Extract Error:", error)
 
-    def info(vault_key, vault_path)
-        output, error = run_steghide_command('info', input_file=carrier_file)
-        print("Info Output:", output)
-        print("Info Error:", error)
+def info(vault_key, vault_path):
+    output, error = run_steghide_command('info', input_file=carrier_file)
+    print("Info Output:", output)
+    print("Info Error:", error)
 
 if __name__ == "__main__":
     app()
