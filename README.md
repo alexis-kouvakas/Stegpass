@@ -13,7 +13,7 @@ A lightweight and straightforward SQLCipher-encrypted steganographic password ma
       GNU General Public License for more details.
     
 ## Work in Progress!
-Steganography features yet to be implemented. At the moment it is just a command-line based SQLCipher password manager!
+Steganography features yet to be implemented, at the moment it is just a command-line based SQLCipher password manager.
 
 
 ## Example usage
