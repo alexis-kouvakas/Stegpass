@@ -20,10 +20,10 @@ Everything is still highly experimental, don't actually use this.
 ### Add existing password
       stegpass.py add <vault.db file location> <Site ID>
 ### Generate password
-      stegpass.py generate <vault.db file location> <Site ID>
+      stegpass.py gen <vault.db file location> <Site ID>
 ### Edit password
       stegpass.py edit <vault.db file location> <Site ID>
-### Delete password
-      stegpass.py delete <vault.db file location> <Site ID>
-### Query password
+### Remove password entry
+      stegpass.py rem <vault.db file location> <Site ID>
+### Query password entry
       stegpass.py query <vault.db file location> <Site ID>
