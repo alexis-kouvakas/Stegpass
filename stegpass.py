@@ -12,7 +12,7 @@ app = typer.Typer()
 
 
 @app.command()
-def add(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
+def init():
     new_vault = not os.path.exists(vault_path)
     connection = sqlite.connect(vault_path)
     cursor = connection.cursor()
@@ -23,22 +23,26 @@ def add(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str
         cursor.execute(
             "CREATE TABLE IF NOT EXISTS passwords (vault_id text, password text)"
         )
+        connection.close()
+    else:
+        print('Error: File not found.')
+        connection.close()
+        exit()
+
+
+@app.command()
+def add(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
+    new_vault = not os.path.exists(vault_path)
+    if new_vault:
+        print("Vault does not exist. Use the init command to create one.")
+        exit()
     else:
         print("Vault found.\n")
-        vault_key = getpass("Master Password:\n")
-        try:
-                cursor.execute(f"PRAGMA key = '{vault_key}'")
-                cursor.execute(
-                    "CREATE TABLE IF NOT EXISTS passwords (vault_id text, password text)"
-                )
-        except Exception as e:
-                print(f"Error verifying password: {e}")
-                exit()
     vault_id = id_input
     while True:
         password = getpass("Password:\n")
         if len(password) >= 7:
-            save_pwd(vault_id, password, vault_path, vault_key)
+            save_pwd(vault_id, password, vault_path)
             break
 
         else:
@@ -46,28 +50,13 @@ def add(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str
 
 
 @app.command()
-def generate(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
+def gen(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
     new_vault = not os.path.exists(vault_path)
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
     if new_vault:
-        print("Vault does not exist. Creating a new vault.")
-        vault_key = getpass("Enter a new master password:\n")
-        cursor.execute(f"PRAGMA key = '{vault_key}'")
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS passwords (vault_id text, password text)"
-        )
+        print("Vault does not exist. Use the init command to create one.")
+        exit()
     else:
         print("Vault found.\n")
-        vault_key = getpass("Master Password:\n")
-        try:
-            cursor.execute(f"PRAGMA key = '{vault_key}'")
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS passwords (vault_id text, password text)"
-            )
-        except Exception as e:
-            print(f"Error verifying password: {e}")
-            exit()
     letters = list(string.ascii_letters)
     digits = list(string.digits)
     symbols = list(string.punctuation)
@@ -92,7 +81,7 @@ def generate(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input
     password = ''.join(password)
     pyperclip.copy(password)
     print('Your new password has been copied to the clipboard!')
-    save_pwd(vault_id, password, vault_path, vault_key)
+    save_pwd(vault_id, password, vault_path)
 
 @app.command()
 def query(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
@@ -100,7 +89,7 @@ def query(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: s
     connection = sqlite.connect(vault_path)
     cursor = connection.cursor()
     if new_vault:
-        print("Vault does not exist.")
+        print("Vault does not exist. Use the init command to create one.")
         exit()
     else:
         print("Vault found.\n")
@@ -118,19 +107,18 @@ def query(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: s
         pyperclip.copy(password)
     else:
         print('No password found for', id_input)
-        return None
 
 @app.command()
 def edit(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
     new_vault = not os.path.exists(vault_path)
     connection = sqlite.connect(vault_path)
     cursor = connection.cursor()
-    cursor.execute('SELECT vault_id FROM passwords WHERE vault_id = ?', (id_input,))
-    entry = cursor.fetchone()[0]
     if new_vault:
-        print("Vault does not exist.")
+        print("Vault does not exist. Use the init command to create one.")
         exit()
     else:
+        cursor.execute('SELECT vault_id FROM passwords WHERE vault_id = ?', (id_input,))
+        entry = cursor.fetchone()[0]
         if entry:
             print('Entry found for', id_input)
         else:
@@ -157,7 +145,7 @@ def edit(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: st
     connection.close()
 
 @app.command()
-def delete(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
+def rem(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
     new_vault = not os.path.exists(vault_path)
     connection = sqlite.connect(vault_path)
     cursor = connection.cursor()
@@ -183,17 +171,17 @@ def delete(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: 
         confirm = input(f"Are you sure you want to delete the password for {id_input}? (y/n):\n")
         if confirm.lower() == 'y':
             cursor.execute('DELETE FROM passwords WHERE vault_id = ?', (id_input,))
+            connection.commit()
             print("Entry deleted.")
         else:
             print("Deletion cancelled.")
-
-    connection.commit()
     connection.close()
 
-def save_pwd(vault_id, password, vault_path, vault_key):
+def save_pwd(vault_id, password, vault_path):
     connection = sqlite.connect(vault_path)
     cursor = connection.cursor()
-    save = input("Do you want to save the password to your vault.db? (y/n):\n")
+    save = input("Do you want to save the password to your vault? (y/n):\n")
+    vault_key = getpass('Master password:\n')
     while True:
         if save == 'y':
             cursor.execute(f"PRAGMA key = '{vault_key}'")
@@ -201,15 +189,13 @@ def save_pwd(vault_id, password, vault_path, vault_key):
             connection.commit()
             connection.close()
             print("Password saved.")
-            break
         elif save == 'n':
             print("Password not saved.")
-            break
         else:
             print("Invalid input. Please enter 'y' or 'n'.")
-            save_pwd(password, vault_id)
+            save_pwd(password, vault_id, vault_path)
 
-def steghide(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
+def run_steghide_command(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
     cmd = ['steghide', command]
 
     if input_file:
@@ -241,10 +227,6 @@ def extract(vault_key, vault_path):
     print("Extract Output:", output)
     print("Extract Error:", error)
 
-def info(vault_key, vault_path):
-    output, error = run_steghide_command('info', input_file=carrier_file)
-    print("Info Output:", output)
-    print("Info Error:", error)
 
 if __name__ == "__main__":
     app()
