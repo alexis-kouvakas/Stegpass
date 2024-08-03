@@ -74,6 +74,13 @@ def save_login(
     master_password: str,
     login: LoginQuery,
 ) -> bool | None:
+    """Save the login query in the database.
+
+    :param vault_path: Path to the vault database file
+    :param master_password: Password to unlock the vault with
+    :param login: Information to populate the table row
+    :return: Boolean for success, or None if an error occurred
+    """
     if not vault_path.exists():
         return None
     with access_vault(vault_path, master_password) as conn:
