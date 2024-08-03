@@ -93,7 +93,7 @@ def gen(
     password = ''.join(password)
     pyperclip.copy(password)
     print('Your new password has been copied to the clipboard!')
-    master_password = input("Master password:")
+    master_password = getpass("Master password:")
     success = steg_db.save_login(
         vault_path,
         master_password,
@@ -118,32 +118,19 @@ def query(
         raise typer.Exit(code=1)
     if uri == "" and username == "":
         print("You need to specify a username or URI")
-    master_password = getpass("Master Password:\n")
-    query_template = "SELECT Username, Password, URI FROM Logins"
-    arguments: list[str] = []
-    if uri != "":
-        query_template += " WHERE URI LIKE '%?%'"
-        arguments += uri
-    if username != "":
-        if "WHERE" in query_template:
-            query_template += " AND Username LIKE '%?%'"
-        else:
-            query_template += " WHERE Username LIKE '%?%'"
-        arguments += username
-    with steg_db.access_vault(vault_path, master_password) as conn:
-        if isinstance(conn, Exception):
-            print("Error verifying password")
-            raise typer.Exit(code=1)
-        cursor = conn.cursor()
-        cursor.execute(query_template, arguments)
-        row: tuple[str, str, str] | None = next(cursor, None)
-        if next(cursor, None):
-            # TODO There's another login that matches, handle this better
-            pass
-    if row:
-        username, password, uri = row
-        pyperclip.copy(password)
-        print(f'Password for {username} ({uri}) copied to clipboard!' )
+        raise typer.Exit(code=1)
+    master_password = getpass("Master Password: ")
+    logins = steg_db.get_logins_by_query(
+        vault_path, master_password, username=username, uri=uri,
+    )
+    if logins is None:
+        print("Error while opening vault")
+        raise typer.Exit(code=1)
+    elif len(logins) > 0:
+        # TODO Handle finding multiple logins
+        login = logins[0]
+        pyperclip.copy(login.password)
+        print(f'Password for {login.username} ({login.uri}) copied to clipboard!' )
         raise typer.Exit()
     else:
         print(
@@ -154,40 +141,77 @@ def query(
         raise typer.Exit(code=1)
 
 @app.command()
-def edit(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
-    new_vault = not os.path.exists(vault_path)
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
-    if new_vault:
+def edit(
+    vault_path: Annotated[Path, typer.Argument()],
+    uri: Annotated[str, typer.Argument()] = "",
+    username: Annotated[str, typer.Argument()] = "",
+) -> NoReturn:
+    if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
-        exit()
+        raise typer.Exit()
+    if uri == "" and username == "":
+        print("You need to specify a username or URI")
+        raise typer.Exit(code=1)
+    master_password = getpass("Master password: ")
+    logins = steg_db.get_logins_by_query(
+        vault_path, master_password, uri=uri, username=username,
+    )
+    if logins is None:
+        print("Error while accessing database")
+        raise typer.Exit(code=1)
+    if not logins:
+        print("No logins match the details provided")
+        raise typer.Exit(code=1)
+    if len(logins) > 1:
+        max_id_len: int = 5  # Starts at 5 because of the word "Index"
+        max_username_len: int = 8  # len("Username") == 8
+        max_uri_len: int = 3  # len("URI") == 3
+        for login in logins:
+            max_id_len = max(len(str(login.login_id)), max_id_len)
+            max_username_len = max(len(str(login.username)), max_username_len)
+            max_uri_len = max(len(str(login.uri)), max_uri_len)
+        format_template = (
+            f"| :^{max_id_len} | :<{max_username_len} | :<{max_uri_len} |"
+        )
+        print("Found the following logins")
+        print("\n")
+        print(format_template.format("Index", "Username", "URI"))
+        for index, login in enumerate(logins):
+            print(format_template.format(index, login.username, login.uri))
+        while True:
+            index = input("Select an index to edit the associated login (q to quit): ")
+            if index.lower() == "q":
+                raise typer.Exit()
+            else:
+                try:
+                    login = logins[int(index)]
+                    break
+                except ValueError:
+                    print("The index needs to be an integer")
+                except IndexError:
+                    print("That is not a valid index")
     else:
-        cursor.execute('SELECT vault_id FROM passwords WHERE vault_id = ?', (id_input,))
-        entry = cursor.fetchone()[0]
-        if entry:
-            print('Entry found for', id_input)
-        else:
-            print('No entry found for', id_input)
-            connection.close()
-            exit()
-        print("Vault found.\n")
-        vault_key = getpass("Master Password:\n")
-        try:
-            cursor.execute(f"PRAGMA key = '{vault_key}'")
-        except Exception as e:
-            print(f"Error verifying password: {e}")
-            exit()
+        login = logins[0]
     while True:
         password = getpass("New password:\n")
         if len(password) >= 7:
-            cursor.execute('UPDATE passwords SET password = ? WHERE vault_id = ?', (password, id_input))
+            with steg_db.access_vault(vault_path, master_password) as conn:
+                if isinstance(conn, Exception):
+                    # This shouldn't ever really happen since we accessed the db above
+                    print("Error while accessing database")
+                    raise typer.Exit(code=1)
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE SET Password = ? WHERE LoginId = ?',
+                    (password, login.login_id),
+                )
+                cursor.close()
+                conn.commit()
             print("Password updated.")
             break
-
         else:
             print('Invalid length. (Min > 6.)')
-    connection.commit()
-    connection.close()
+
 
 @app.command()
 def rem(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):

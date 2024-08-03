@@ -6,5 +6,6 @@ from dataclasses import dataclass
 class Login:
     """Row in the Logins table."""
     login_id: int
-    login_name: str
+    username: str
     password: str
+    uri: str

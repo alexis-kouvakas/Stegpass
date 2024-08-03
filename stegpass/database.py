@@ -2,13 +2,14 @@
 import contextlib
 from collections.abc import Iterator
 from pathlib import Path
-from sqlite3 import DatabaseError
-from typing import TYPE_CHECKING
+from sqlite3 import DatabaseError, Row
+from typing import TYPE_CHECKING, Sequence
 
 import pysqlcipher3.dbapi2 as sqlite
 
 from stegpass.database_exceptions import PasswordValidationError
 from stegpass.database_queries import LoginQuery
+from stegpass.database_structures import Login
 
 
 if TYPE_CHECKING:
@@ -90,3 +91,54 @@ def save_login(
         cursor.close()
         conn.commit()
         return conn.total_changes > 0
+
+
+def get_logins_by_query(
+    vault_path: Path,
+    master_password: str,
+    *,
+    uri: str | None = None,
+    username: str | None = None
+) -> Sequence[Login] | None:
+    """Return a sequence of Login objects for which uri and/or username is a substring.
+
+    If the password is incorrect, return None.
+    If both uri and username are None or empty strings, return None.
+    If no rows are found, return an empty list.
+
+    :param vault_path: Path to the vault file
+    :param master_password: Password to unlock the vault
+    :param uri: The URI to match in the database
+    :param username: The username to match in the database
+    :return: List of Login objects, empty list, or None
+    """
+    if not uri and not username:
+        return None
+    query_template = "SELECT LoginId, Username, Password, URI FROM Logins"
+    arguments: list[str] = []
+    if uri:
+        query_template += " WHERE URI LIKE '%?%'"
+        arguments += uri
+    if username:
+        if "WHERE" in query_template:
+            query_template += " AND Username LIKE '%?%'"
+        else:
+            query_template += " WHERE Username LIKE '%?%'"
+        arguments += username
+    with access_vault(vault_path, master_password) as conn:
+        if isinstance(conn, Exception):
+            return None
+        conn.row_factory = Row
+        cursor = conn.cursor()
+        cursor.execute(query_template, arguments)
+        rows: list[Row] = cursor.fetchall()
+    logins = tuple(
+        Login(
+            login_id=row["LoginId"],
+            username=row["Username"],
+            password=row["Password"],
+            uri=row["URI"],
+        )
+        for row in rows
+    ) 
+    return logins
