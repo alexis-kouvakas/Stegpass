@@ -25,7 +25,7 @@ def create_vault(vault_path: Path, master_password: str) -> bool:
     """
     if vault_path.exists():
         return False
-    with sqlite.connect(vault_path) as conn:
+    with sqlite.connect(str(vault_path)) as conn:
         cursor = conn.cursor()
         # TODO Sanitize master_password
         cursor.execute(f"PRAGMA key='{master_password}';")
@@ -56,7 +56,7 @@ def access_vault(
     if not vault_path.exists():
         yield FileNotFoundError(f"\"{vault_path}\" does not exist")
     else:
-        conn = sqlite.connect(vault_path)
+        conn = sqlite.connect(str(vault_path))
         cursor = conn.cursor()
         cursor.execute(f"PRAGMA key='{master_password}';")
         try:
