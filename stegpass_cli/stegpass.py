@@ -45,32 +45,36 @@ def add(
     while True:
         password = getpass(f"Enter the password for {username}:\n")
         if len(password) >= 7:
-            steg_db.save_login(
+            success = steg_db.save_login(
                 vault_path,
                 master_password,
                 Login(username, password, uri)
             )
-            break
+            if success:
+                print(f"Successfully saved password for {username}")
+                raise typer.Exit()
+            else:
+                print(f"Failed to save password for {username}")
+                raise typer.Exit(code=1)
 
         else:
             print('Invalid length. (Min: 7)')
-    raise typer.Exit()
 
 
 @app.command()
-def gen(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
-    new_vault = not os.path.exists(vault_path)
-    if new_vault:
+def gen(
+    vault_path: Annotated[Path, typer.Argument()],
+    uri: Annotated[str, typer.Argument()],
+    username: Annotated[str, typer.Argument()],
+) -> NoReturn:
+    if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
-        exit()
-    else:
-        print("Vault found.\n")
+        raise typer.Exit(code=1)
     letters = list(string.ascii_letters)
     digits = list(string.digits)
     symbols = list(string.punctuation)
     char_list = list(letters + digits + symbols)
     password = []
-    vault_id = id_input
     while True:
         try:
             length = int(input('How many characters long should the password be? (min. 7):\n'))
@@ -89,7 +93,19 @@ def gen(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str
     password = ''.join(password)
     pyperclip.copy(password)
     print('Your new password has been copied to the clipboard!')
-    save_pwd(vault_id, password, vault_path)
+    master_password = input("Master password:")
+    success = steg_db.save_login(
+        vault_path,
+        master_password,
+        Login(username, password, uri)
+    )
+    if success:
+        print(f"Successfully saved password for {username}")
+        raise typer.Exit()
+    else:
+        print(f"Failed to save password for {username}")
+        raise typer.Exit(code=1)
+
 
 @app.command()
 def query(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
