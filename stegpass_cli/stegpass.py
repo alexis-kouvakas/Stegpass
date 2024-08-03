@@ -120,78 +120,28 @@ def query(
         print("You need to specify a username or URI")
         raise typer.Exit(code=1)
     master_password = getpass("Master Password: ")
-    logins = steg_db.get_logins_by_query(
-        vault_path, master_password, username=username, uri=uri,
+    login = query_login_interactive(
+        vault_path, master_password, uri=uri, username=username
     )
-    if logins is None:
-        print("Error while opening vault")
-        raise typer.Exit(code=1)
-    elif len(logins) > 0:
         # TODO Handle finding multiple logins
-        login = logins[0]
-        pyperclip.copy(login.password)
-        print(f'Password for {login.username} ({login.uri}) copied to clipboard!' )
-        raise typer.Exit()
-    else:
-        print(
-            "No password found"
-                + (f" for {username}" if username != "" else "")
-                + (f" at {uri}" if uri != "" else "")
-        )
-        raise typer.Exit(code=1)
+    pyperclip.copy(login.password)
+    print(f'Password for {login.username} ({login.uri}) copied to clipboard!' )
+    raise typer.Exit()
+
 
 @app.command()
 def edit(
     vault_path: Annotated[Path, typer.Argument()],
-    uri: Annotated[str, typer.Argument()] = "",
-    username: Annotated[str, typer.Argument()] = "",
+    uri: Annotated[str, typer.Option()] = "",
+    username: Annotated[str, typer.Option()] = "",
 ) -> NoReturn:
     if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
-        raise typer.Exit()
-    if uri == "" and username == "":
-        print("You need to specify a username or URI")
         raise typer.Exit(code=1)
     master_password = getpass("Master password: ")
-    logins = steg_db.get_logins_by_query(
-        vault_path, master_password, uri=uri, username=username,
+    login = query_login_interactive(
+        vault_path, master_password, uri=uri, username=username
     )
-    if logins is None:
-        print("Error while accessing database")
-        raise typer.Exit(code=1)
-    if not logins:
-        print("No logins match the details provided")
-        raise typer.Exit(code=1)
-    if len(logins) > 1:
-        max_id_len: int = 5  # Starts at 5 because of the word "Index"
-        max_username_len: int = 8  # len("Username") == 8
-        max_uri_len: int = 3  # len("URI") == 3
-        for login in logins:
-            max_id_len = max(len(str(login.login_id)), max_id_len)
-            max_username_len = max(len(str(login.username)), max_username_len)
-            max_uri_len = max(len(str(login.uri)), max_uri_len)
-        format_template = (
-            f"| :^{max_id_len} | :<{max_username_len} | :<{max_uri_len} |"
-        )
-        print("Found the following logins")
-        print("\n")
-        print(format_template.format("Index", "Username", "URI"))
-        for index, login in enumerate(logins):
-            print(format_template.format(index, login.username, login.uri))
-        while True:
-            index = input("Select an index to edit the associated login (q to quit): ")
-            if index.lower() == "q":
-                raise typer.Exit()
-            else:
-                try:
-                    login = logins[int(index)]
-                    break
-                except ValueError:
-                    print("The index needs to be an integer")
-                except IndexError:
-                    print("That is not a valid index")
-    else:
-        login = logins[0]
     while True:
         password = getpass("New password:\n")
         if len(password) >= 7:
@@ -208,7 +158,7 @@ def edit(
                 cursor.close()
                 conn.commit()
             print("Password updated.")
-            break
+            raise typer.Exit()
         else:
             print('Invalid length. (Min > 6.)')
 
@@ -263,6 +213,70 @@ def save_pwd(vault_id, password, vault_path):
         else:
             print("Invalid input. Please enter 'y' or 'n'.")
             save_pwd(password, vault_id, vault_path)
+
+
+def query_login_interactive(
+    vault_path: Path,
+    master_password: str,
+    *,
+    uri: str | None = None,
+    username: str | None = None,
+) -> Login:
+    """Ask the user if multiple logins are found, else return the only login.
+
+    This function will exit the program if either the password is incorrect
+    or if no logins are returned.
+
+    :param vault_path: Path to the vault database file
+    :param master_password: Password to unlock the vault with
+    :param uri: The URI to match in the Logins table
+    :param username: The Username to match in the logins table
+    :return: Login object
+    """
+    if uri == "" and username == "":
+        print("You need to specify a username or URI")
+        raise typer.Exit(code=1)
+    logins = steg_db.get_logins_by_query(
+        vault_path, master_password, uri=uri, username=username,
+    )
+    if logins is None:
+        print("Error while accessing database")
+        raise typer.Exit(code=1)
+    if not logins:
+        print("No logins match the details provided")
+        raise typer.Exit(code=1)
+    if len(logins) > 1:
+        max_id_len: int = 5  # Starts at 5 because of the word "Index"
+        max_username_len: int = 8  # len("Username") == 8
+        max_uri_len: int = 3  # len("URI") == 3
+        for login in logins:
+            max_id_len = max(len(str(login.login_id)), max_id_len)
+            max_username_len = max(len(str(login.username)), max_username_len)
+            max_uri_len = max(len(str(login.uri)), max_uri_len)
+        format_template = (
+            f"| :^{max_id_len} | :<{max_username_len} | :<{max_uri_len} |"
+        )
+        print("Found the following logins")
+        print("\n")
+        print(format_template.format("Index", "Username", "URI"))
+        for index, login in enumerate(logins):
+            print(format_template.format(index, login.username, login.uri))
+        while True:
+            index = input("Select an index to edit the associated login (q to quit): ")
+            if index.lower() == "q":
+                raise typer.Exit()
+            else:
+                try:
+                    login = logins[int(index)]
+                    break
+                except ValueError:
+                    print("The index needs to be an integer")
+                except IndexError:
+                    print("That is not a valid index")
+    else:
+        login = logins[0]
+    return login
+
 
 def run_steghide_command(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
     cmd = ['steghide', command]
