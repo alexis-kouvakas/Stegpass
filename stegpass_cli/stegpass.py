@@ -108,29 +108,50 @@ def gen(
 
 
 @app.command()
-def query(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
-    new_vault = not os.path.exists(vault_path)
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
-    if new_vault:
+def query(
+    vault_path: Annotated[Path, typer.Argument()],
+    uri: Annotated[str, typer.Option()] = "",
+    username: Annotated[str, typer.Option()] = "",
+) -> NoReturn:
+    if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
-        exit()
-    else:
-        print("Vault found.\n")
-        vault_key = getpass("Master Password:\n")
-        try:
-            cursor.execute(f"PRAGMA key = '{vault_key}'")
-        except Exception as e:
-            print(f"Error verifying password: {e}")
-            exit()
-    cursor.execute('SELECT password FROM passwords WHERE vault_id = ?', (id_input,))
-    password = cursor.fetchone()[0]
-    connection.close()
-    if password:
-        print('Password copied to clipboard!' )
+        raise typer.Exit(code=1)
+    if uri == "" and username == "":
+        print("You need to specify a username or URI")
+    master_password = getpass("Master Password:\n")
+    query_template = "SELECT Username, Password, URI FROM Logins"
+    arguments: list[str] = []
+    if uri != "":
+        query_template += " WHERE URI LIKE '%?%'"
+        arguments += uri
+    if username != "":
+        if "WHERE" in query_template:
+            query_template += " AND Username LIKE '%?%'"
+        else:
+            query_template += " WHERE Username LIKE '%?%'"
+        arguments += username
+    with steg_db.access_vault(vault_path, master_password) as conn:
+        if isinstance(conn, Exception):
+            print("Error verifying password")
+            raise typer.Exit(code=1)
+        cursor = conn.cursor()
+        cursor.execute(query_template, arguments)
+        row: tuple[str, str, str] | None = next(cursor, None)
+        if next(cursor, None):
+            # TODO There's another login that matches, handle this better
+            pass
+    if row:
+        username, password, uri = row
         pyperclip.copy(password)
+        print(f'Password for {username} ({uri}) copied to clipboard!' )
+        raise typer.Exit()
     else:
-        print('No password found for', id_input)
+        print(
+            "No password found"
+                + (f" for {username}" if username != "" else "")
+                + (f" at {uri}" if uri != "" else "")
+        )
+        raise typer.Exit(code=1)
 
 @app.command()
 def edit(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
