@@ -2,17 +2,13 @@
 import contextlib
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 
 import pysqlcipher3.dbapi2 as sqlite
 
 from stegpass.database_exceptions import PasswordValidationError
 from stegpass.database_queries import LoginQuery
 from stegpass.database_structures import Login
-
-
-if TYPE_CHECKING:
-    from sqlite3 import Connection
 
 
 def create_vault(vault_path: Path, master_password: str) -> bool:
@@ -45,7 +41,7 @@ def create_vault(vault_path: Path, master_password: str) -> bool:
 def access_vault(
     vault_path: Path,
     master_password: str,
-) -> Iterator["Connection | Exception"]:
+) -> Iterator[sqlite.Connection | Exception]:
     """Attempt to connect to a database with a master password.
 
     :param vault_path: Path to the new vault
