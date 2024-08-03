@@ -100,7 +100,7 @@ def get_logins_by_query(
     uri: str | None = None,
     username: str | None = None
 ) -> Sequence[Login] | None:
-    """Return a sequence of Login objects for which uri and/or username is a substring.
+    """Return a sequence of Logins where uri and/or username is a substring.
 
     If the password is incorrect, return None.
     If both uri and username are None or empty strings, return None.
@@ -140,5 +140,5 @@ def get_logins_by_query(
             uri=row["URI"],
         )
         for row in rows
-    ) 
+    )
     return logins

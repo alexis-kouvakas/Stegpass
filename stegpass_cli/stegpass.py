@@ -1,4 +1,3 @@
-import os
 import secrets
 import string
 import subprocess
@@ -8,7 +7,6 @@ from pathlib import Path
 
 import pyperclip
 import typer
-import pysqlcipher3.dbapi2 as sqlite
 
 import stegpass.database as steg_db
 from stegpass.database_queries import Login
@@ -77,7 +75,10 @@ def gen(
     password = []
     while True:
         try:
-            length = int(input('How many characters long should the password be? (min. 7):\n'))
+            length = int(input(
+                'How many characters long should '
+                'the password be? (min. 7): '
+            ))
             if length > 6:
                 break
             else:
@@ -123,9 +124,9 @@ def query(
     login = query_login_interactive(
         vault_path, master_password, uri=uri, username=username
     )
-        # TODO Handle finding multiple logins
+    # TODO Handle finding multiple logins
     pyperclip.copy(login.password)
-    print(f'Password for {login.username} ({login.uri}) copied to clipboard!' )
+    print(f'Password for {login.username} ({login.uri}) copied to clipboard!')
     raise typer.Exit()
 
 
@@ -146,10 +147,7 @@ def edit(
         password = getpass("New password:\n")
         if len(password) >= 7:
             with steg_db.access_vault(vault_path, master_password) as conn:
-                if isinstance(conn, Exception):
-                    # This shouldn't ever really happen since we accessed the db above
-                    print("Error while accessing database")
-                    raise typer.Exit(code=1)
+                assert not isinstance(conn, Exception)
                 cursor = conn.cursor()
                 cursor.execute(
                     'UPDATE SET Password = ? WHERE LoginId = ?',
@@ -177,12 +175,18 @@ def rem(
         vault_path, master_password, uri=uri, username=username
     )
     print(f"Found login for {login.username} at {login.uri}")
-    confirm = input(f"Are you sure you want to delete the entry for {login.username} ({login.uri})? (y/N): ")
+    confirm = input(
+        "Are you sure you want to delete the entry for "
+        f"{login.username} ({login.uri})? (y/N): "
+    )
     with steg_db.access_vault(vault_path, master_password) as conn:
-        assert not isinstance(conn, Exception)  # We were able to access db above
+        assert not isinstance(conn, Exception)
         cursor = conn.cursor()
         if confirm.lower() == 'y':
-            cursor.execute('DELETE FROM Logins WHERE LoginId = ?', (login.login_id,))
+            cursor.execute(
+                'DELETE FROM Logins WHERE LoginId = ?',
+                (login.login_id,)
+            )
             cursor.close()
             conn.commit()
             print("Entry deleted.")
@@ -238,7 +242,10 @@ def query_login_interactive(
         for index, login in enumerate(logins):
             print(format_template.format(index, login.username, login.uri))
         while True:
-            index = input("Select an index with the associated login (q to quit): ")
+            index = input(
+                "Select an index with the associated login "
+                "(q to quit): "
+            )
             if index.lower() == "q":
                 raise typer.Exit()
             else:
@@ -254,7 +261,12 @@ def query_login_interactive(
     return login
 
 
-def run_steghide_command(command, input_file=None, output_file=None, password=None): # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
+def run_steghide_command(
+    command,
+    input_file=None,
+    output_file=None,
+    password=None
+):  # EXPERIMENTAL/UNTESTED DON'T TRY OUT ON A DATABASE YOU CARE ABOUT
     cmd = ['steghide', command]
 
     if input_file:
@@ -265,7 +277,9 @@ def run_steghide_command(command, input_file=None, output_file=None, password=No
         cmd.extend(['-p', password])
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True
+        )
         stdout = result.stdout
         stderr = result.stderr
     except subprocess.CalledProcessError as e:
@@ -274,15 +288,25 @@ def run_steghide_command(command, input_file=None, output_file=None, password=No
 
     return stdout, stderr
 
-def embed(vault_key, vault_path):
-    output, error = run_steghide_command('embed', input_file=vault_path, output_file=carrier_file,
-                                        password=vault_key)
+
+def embed(vault_key, vault_path, carrier_file):
+    output, error = run_steghide_command(
+        'embed',
+        input_file=vault_path,
+        output_file=carrier_file,
+        password=vault_key,
+    )
     print("Embed Output:", output)
     print("Embed Error:", error)
 
+
 def extract(vault_key, vault_path):
-    output, error = run_steghide_command('extract', input_file=vault_path, output_file='vault.db',
-                                        password=vault_key)
+    output, error = run_steghide_command(
+        'extract',
+        input_file=vault_path,
+        output_file='vault.db',
+        password=vault_key
+    )
     print("Extract Output:", output)
     print("Extract Error:", error)
 
