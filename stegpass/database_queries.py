@@ -5,5 +5,6 @@ from dataclasses import dataclass
 @dataclass
 class LoginQuery:
     """Columns for the Logins table"""
-    login_name: str
+    username: str
     password: str
+    uri: str
