@@ -40,16 +40,19 @@ def add(
     if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
         raise typer.Exit(code=1)
-    master_password = input("Master password: ")
     while True:
-        password = getpass(f"Enter the password for {username}:\n")
+        password = getpass(f"Enter the password for {username}: ")
         if len(password) >= 7:
+            master_password = getpass("Master password: ")
             success = steg_db.save_login(
                 vault_path,
                 master_password,
                 LoginQuery(username, password, uri)
             )
-            if success:
+            if success is None:
+                print("Failed to access database.")
+                raise typer.Exit(code=1)
+            elif success:
                 print(f"Successfully saved password for {username}")
                 raise typer.Exit()
             else:
@@ -145,13 +148,13 @@ def edit(
         vault_path, master_password, uri=uri, username=username
     )
     while True:
-        password = getpass("New password:\n")
+        password = getpass("New password: ")
         if len(password) >= 7:
             with steg_db.access_vault(vault_path, master_password) as conn:
                 assert not isinstance(conn, Exception)
                 cursor = conn.cursor()
                 cursor.execute(
-                    'UPDATE SET Password = ? WHERE LoginId = ?',
+                    'UPDATE Logins SET Password = ? WHERE LoginId = ?',
                     (password, login.login_id),
                 )
                 cursor.close()
@@ -171,11 +174,10 @@ def rem(
     if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
         raise typer.Exit(code=1)
-    master_password = getpass("Master Password:\n")
+    master_password = getpass("Master Password: ")
     login = query_login_interactive(
         vault_path, master_password, uri=uri, username=username
     )
-    print(f"Found login for {login.username} at {login.uri}")
     confirm = input(
         "Are you sure you want to delete the entry for "
         f"{login.username} ({login.uri})? (y/N): "
@@ -235,13 +237,20 @@ def query_login_interactive(
             max_username_len = max(len(str(login.username)), max_username_len)
             max_uri_len = max(len(str(login.uri)), max_uri_len)
         format_template = (
-            f"| :^{max_id_len} | :<{max_username_len} | :<{max_uri_len} |"
+            f"| {{:^{max_id_len}}} | {{:<{max_username_len}}} "
+            f"| {{:<{max_uri_len}}} |"
         )
         print("Found the following logins")
         print("\n")
         print(format_template.format("Index", "Username", "URI"))
         for index, login in enumerate(logins):
-            print(format_template.format(index, login.username, login.uri))
+            print(
+                format_template.format(
+                    index + 1,
+                    login.username,
+                    login.uri or ""
+                )
+            )
         while True:
             index = input(
                 "Select an index with the associated login "
@@ -251,7 +260,7 @@ def query_login_interactive(
                 raise typer.Exit()
             else:
                 try:
-                    login = logins[int(index)]
+                    login = logins[int(index) - 1]
                     break
                 except ValueError:
                     print("The index needs to be an integer")
@@ -259,6 +268,7 @@ def query_login_interactive(
                     print("That is not a valid index")
     else:
         login = logins[0]
+    print(f"Found login for {login.username} at {login.uri}")
     return login
 
 

@@ -2,7 +2,6 @@
 import contextlib
 from collections.abc import Iterator
 from pathlib import Path
-from sqlite3 import DatabaseError, Row
 from typing import TYPE_CHECKING, Sequence
 
 import pysqlcipher3.dbapi2 as sqlite
@@ -62,14 +61,11 @@ def access_vault(
         try:
             # Checking if the password was correct
             cursor.execute("PRAGMA schema_version;")
-        except DatabaseError:
+        except sqlite.DatabaseError:
             yield PasswordValidationError()
-        cursor.close()  # Closing the cursor keeps the database unlocked
-        # Must yield conn within try-finally so it is properly closed
-        try:
+        else:
+            cursor.close()  # Closing the cursor keeps the database unlocked
             yield conn
-        finally:
-            print("lol")
             conn.close()
 
 
@@ -77,20 +73,22 @@ def save_login(
     vault_path: Path,
     master_password: str,
     login: LoginQuery,
-) -> bool:
+) -> bool | None:
     if not vault_path.exists():
-        return False
+        return None
     with access_vault(vault_path, master_password) as conn:
         if isinstance(conn, Exception):
-            raise conn
+            return None
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO Logins (Username, Password) VALUES (?, ?)",
-            (login.login_name, login.password),
+            "INSERT INTO Logins (Username, Password, URI) "
+            "VALUES (?, ?, ?)",
+            (login.username, login.password, login.uri),
         )
         cursor.close()
         conn.commit()
-        return conn.total_changes > 0
+        success = conn.total_changes > 0
+    return success
 
 
 def get_logins_by_query(
@@ -117,21 +115,22 @@ def get_logins_by_query(
     query_template = "SELECT LoginId, Username, Password, URI FROM Logins"
     arguments: list[str] = []
     if uri:
-        query_template += " WHERE URI LIKE '%?%'"
-        arguments += uri
+        query_template += " WHERE URI LIKE ?"
+        arguments.append(f"%{uri}%")
     if username:
         if "WHERE" in query_template:
-            query_template += " AND Username LIKE '%?%'"
+            query_template += " AND Username LIKE ?"
         else:
-            query_template += " WHERE Username LIKE '%?%'"
-        arguments += username
+            query_template += " WHERE Username LIKE ?"
+        arguments.append(f"%{username}%")
+    query_template += ";"
     with access_vault(vault_path, master_password) as conn:
         if isinstance(conn, Exception):
             return None
-        conn.row_factory = Row
+        conn.row_factory = sqlite.Row
         cursor = conn.cursor()
         cursor.execute(query_template, arguments)
-        rows: list[Row] = cursor.fetchall()
+        rows: list[sqlite.Row] = cursor.fetchall()
     logins = tuple(
         Login(
             login_id=row["LoginId"],
