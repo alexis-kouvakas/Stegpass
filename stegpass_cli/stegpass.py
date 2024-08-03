@@ -1,33 +1,33 @@
 import os
-import string
 import secrets
+import string
+import subprocess
+from getpass import getpass
+from typing import Annotated
+from pathlib import Path
+
+import stegpass.database as steg_db
+
 import pyperclip
 import typer
-from typing_extensions import Annotated
 from pysqlcipher3 import dbapi2 as sqlite
-from getpass import getpass
-import subprocess
 
 app = typer.Typer()
 
 
 @app.command()
-def init():
-    new_vault = not os.path.exists(vault_path)
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
-    if new_vault:
-        print("Vault does not exist. Creating a new vault.")
-        vault_key = getpass("Enter a new master password:\n")
-        cursor.execute(f"PRAGMA key = '{vault_key}'")
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS passwords (vault_id text, password text)"
-        )
-        connection.close()
+def init(vault_path: Annotated[Path, typer.Argument()]):
+    if vault_path.exists():
+        print(f"File already exists at {vault_path}")
+        raise typer.Exit(code=1)
     else:
-        print('Error: File not found.')
-        connection.close()
-        exit()
+        print("Confirmed that vault does not exist, creating a new vault")
+        master_password = getpass("Enter a new master password:\n")
+        success = steg_db.create_vault(vault_path, master_password)
+        if success:
+            print(f"Sucessfully created vault at {vault_path}")
+        else:
+            print(f"Failed to create vault at {vault_path}")
 
 
 @app.command()
