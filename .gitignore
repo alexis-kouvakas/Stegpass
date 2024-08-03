@@ -1,0 +1,10 @@
+# Development files
+.pre-commit-config.yaml
+pyrightconfig.json
+stubs/
+.venv/
+
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
