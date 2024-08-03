@@ -31,7 +31,7 @@ def create_vault(vault_path: Path, master_password: str) -> bool:
         cursor.execute(
             "CREATE TABLE Logins("
             "LoginId INTEGER PRIMARY KEY, "
-            "LoginName TEXT NOT NULL, "
+            "Username TEXT NOT NULL, "
             "Password TEXT NOT NULL, "
             "URI TEXT NULL"
             ");"
