@@ -3,20 +3,21 @@ import secrets
 import string
 import subprocess
 from getpass import getpass
-from typing import Annotated
+from typing import Annotated, NoReturn
 from pathlib import Path
-
-import stegpass.database as steg_db
 
 import pyperclip
 import typer
-from pysqlcipher3 import dbapi2 as sqlite
+import pysqlcipher3.dbapi2 as sqlite
+
+import stegpass.database as steg_db
+from stegpass.database_queries import Login
 
 app = typer.Typer()
 
 
 @app.command()
-def init(vault_path: Annotated[Path, typer.Argument()]):
+def init(vault_path: Annotated[Path, typer.Argument()]) -> NoReturn:
     if vault_path.exists():
         print(f"File already exists at {vault_path}")
         raise typer.Exit(code=1)
@@ -28,25 +29,32 @@ def init(vault_path: Annotated[Path, typer.Argument()]):
             print(f"Sucessfully created vault at {vault_path}")
         else:
             print(f"Failed to create vault at {vault_path}")
+        raise typer.Exit()
 
 
 @app.command()
-def add(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
-    new_vault = not os.path.exists(vault_path)
-    if new_vault:
+def add(
+    vault_path: Annotated[Path, typer.Argument()],
+    uri: Annotated[str, typer.Argument()],
+    username: Annotated[str, typer.Argument()],
+) -> NoReturn:
+    if not vault_path.exists():
         print("Vault does not exist. Use the init command to create one.")
-        exit()
-    else:
-        print("Vault found.\n")
-    vault_id = id_input
+        raise typer.Exit(code=1)
+    master_password = input("Master password: ")
     while True:
-        password = getpass("Password:\n")
+        password = getpass(f"Enter the password for {username}:\n")
         if len(password) >= 7:
-            save_pwd(vault_id, password, vault_path)
+            steg_db.save_login(
+                vault_path,
+                master_password,
+                Login(username, password, uri)
+            )
             break
 
         else:
             print('Invalid length. (Min: 7)')
+    raise typer.Exit()
 
 
 @app.command()

@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 import pysqlcipher3.dbapi2 as sqlite
 
 from stegpass.database_exceptions import PasswordValidationError
+from stegpass.database_queries import LoginQuery
 
 
 if TYPE_CHECKING:
-    from sqlite3 import Cursor
+    from sqlite3 import Connection
 
 
 def create_vault(vault_path: Path, master_password: str) -> bool:
@@ -31,7 +32,8 @@ def create_vault(vault_path: Path, master_password: str) -> bool:
             "CREATE TABLE Logins("
             "LoginId INTEGER PRIMARY KEY, "
             "LoginName TEXT NOT NULL, "
-            "Password TEXT NOT NULL"
+            "Password TEXT NOT NULL, "
+            "URI TEXT NULL"
             ");"
         )
         cursor.close()
@@ -43,8 +45,7 @@ def create_vault(vault_path: Path, master_password: str) -> bool:
 def access_vault(
     vault_path: Path,
     master_password: str,
-    should_commit: bool = False,
-) -> Iterator["Cursor | Exception"]:
+) -> Iterator["Connection | Exception"]:
     """Attempt to connect to a database with a master password.
 
     :param vault_path: Path to the new vault
@@ -62,11 +63,30 @@ def access_vault(
             cursor.execute("PRAGMA schema_version;")
         except DatabaseError:
             yield PasswordValidationError()
+        cursor.close()  # Closing the cursor keeps the database unlocked
         # Must yield conn within try-finally so it is properly closed
         try:
-            yield cursor
+            yield conn
         finally:
-            if should_commit:
-                conn.commit()
-            cursor.close()
+            print("lol")
             conn.close()
+
+
+def save_login(
+    vault_path: Path,
+    master_password: str,
+    login: LoginQuery,
+) -> bool:
+    if not vault_path.exists():
+        return False
+    with access_vault(vault_path, master_password) as conn:
+        if isinstance(conn, Exception):
+            raise conn
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO Logins (LoginName, Password) VALUES (?, ?)",
+            (login.login_name, login.password),
+        )
+        cursor.close()
+        conn.commit()
+        return conn.total_changes > 0
