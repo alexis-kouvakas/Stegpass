@@ -9,7 +9,7 @@ import pyperclip
 import typer
 
 import stegpass.database as steg_db
-from stegpass.database_queries import Login
+from stegpass.database_structures import Login
 
 app = typer.Typer()
 
