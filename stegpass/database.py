@@ -84,7 +84,7 @@ def save_login(
             raise conn
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO Logins (LoginName, Password) VALUES (?, ?)",
+            "INSERT INTO Logins (Username, Password) VALUES (?, ?)",
             (login.login_name, login.password),
         )
         cursor.close()
