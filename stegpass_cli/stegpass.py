@@ -164,55 +164,31 @@ def edit(
 
 
 @app.command()
-def rem(vault_path: Annotated[str, typer.Argument()] = "vault.db", id_input: str = typer.Argument(..., help="The ID of the site to query.")):
-    new_vault = not os.path.exists(vault_path)
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
-    if new_vault:
-        print("Vault does not exist.")
-        exit()
-    else:
-        print("Vault found.\n")
-        vault_key = getpass("Master Password:\n")
-        try:
-            cursor.execute(f"PRAGMA key = '{vault_key}'")
-        except Exception as e:
-            print(f"Error verifying password: {e}")
-            exit()
-        cursor.execute('SELECT vault_id FROM passwords WHERE vault_id = ?', (id_input,))
-        entry = cursor.fetchone()[0]
-        if entry:
-            print('Entry found for', id_input)
-        else:
-            print('No entry found for', id_input)
-            connection.close()
-            exit()
-        confirm = input(f"Are you sure you want to delete the password for {id_input}? (y/n):\n")
+def rem(
+    vault_path: Annotated[Path, typer.Argument()],
+    uri: Annotated[str, typer.Option()] = "",
+    username: Annotated[str, typer.Option()] = "",
+) -> NoReturn:
+    if not vault_path.exists():
+        print("Vault does not exist. Use the init command to create one.")
+        raise typer.Exit(code=1)
+    master_password = getpass("Master Password:\n")
+    login = query_login_interactive(
+        vault_path, master_password, uri=uri, username=username
+    )
+    print(f"Found login for {login.username} at {login.uri}")
+    confirm = input(f"Are you sure you want to delete the entry for {login.username} ({login.uri})? (y/N): ")
+    with steg_db.access_vault(vault_path, master_password) as conn:
+        assert not isinstance(conn, Exception)  # We were able to access db above
+        cursor = conn.cursor()
         if confirm.lower() == 'y':
-            cursor.execute('DELETE FROM passwords WHERE vault_id = ?', (id_input,))
-            connection.commit()
+            cursor.execute('DELETE FROM Logins WHERE LoginId = ?', (login.login_id,))
+            cursor.close()
+            conn.commit()
             print("Entry deleted.")
         else:
             print("Deletion cancelled.")
-    connection.close()
-
-def save_pwd(vault_id, password, vault_path):
-    connection = sqlite.connect(vault_path)
-    cursor = connection.cursor()
-    save = input("Do you want to save the password to your vault? (y/n):\n")
-    vault_key = getpass('Master password:\n')
-    while True:
-        if save == 'y':
-            cursor.execute(f"PRAGMA key = '{vault_key}'")
-            cursor.execute("INSERT INTO passwords VALUES (?, ?)", (vault_id, password))
-            connection.commit()
-            connection.close()
-            print("Password saved.")
-        elif save == 'n':
-            print("Password not saved.")
-        else:
-            print("Invalid input. Please enter 'y' or 'n'.")
-            save_pwd(password, vault_id, vault_path)
+    raise typer.Exit()
 
 
 def query_login_interactive(
@@ -262,7 +238,7 @@ def query_login_interactive(
         for index, login in enumerate(logins):
             print(format_template.format(index, login.username, login.uri))
         while True:
-            index = input("Select an index to edit the associated login (q to quit): ")
+            index = input("Select an index with the associated login (q to quit): ")
             if index.lower() == "q":
                 raise typer.Exit()
             else:
