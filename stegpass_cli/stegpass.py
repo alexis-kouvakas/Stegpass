@@ -9,6 +9,7 @@ import pyperclip
 import typer
 
 import stegpass.database as steg_db
+from stegpass.database_queries import LoginQuery
 from stegpass.database_structures import Login
 
 app = typer.Typer()
@@ -46,7 +47,7 @@ def add(
             success = steg_db.save_login(
                 vault_path,
                 master_password,
-                Login(username, password, uri)
+                LoginQuery(username, password, uri)
             )
             if success:
                 print(f"Successfully saved password for {username}")
@@ -98,7 +99,7 @@ def gen(
     success = steg_db.save_login(
         vault_path,
         master_password,
-        Login(username, password, uri)
+        LoginQuery(username, password, uri)
     )
     if success:
         print(f"Successfully saved password for {username}")
