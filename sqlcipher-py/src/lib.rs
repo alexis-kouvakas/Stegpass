@@ -132,6 +132,7 @@ fn connect(#[pyo3(from_py_with = "as_pathbuf")] filename: PathBuf) -> PyResult<P
 /// A Python module implemented in Rust.
 #[pymodule]
 fn sqlcipher<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
+    use crate::types::*;
     m.add("apilevel", "2.0")?;
     m.add("threadsafety", 0)?;
     m.add("paramstyle", "qmark")?;
@@ -144,6 +145,18 @@ fn sqlcipher<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
     m.add("IntegrityError", m.py().get_type_bound::<IntegrityError>())?;
     m.add("ProgrammingError", m.py().get_type_bound::<ProgrammingError>())?;
     m.add("NotSupportedError", m.py().get_type_bound::<NotSupportedError>())?;
+    m.add_class::<PyDate>()?;
+    m.add_class::<PyTime>()?;
+    m.add_class::<PyTimestamp>()?;
+    m.add_class::<PyDateFromTicks>()?;
+    m.add_class::<PyTimeFromTicks>()?;
+    m.add_class::<PyTimestampFromTicks>()?;
+    m.add_class::<PyBinary>()?;
+    m.add_class::<PySqliteString>()?;
+    m.add_class::<PySqliteBinary>()?;
+    m.add_class::<PySqliteNumber>()?;
+    m.add_class::<PySqliteDateTime>()?;
+    m.add_class::<PySqliteRowId>()?;
     m.add_class::<PyConnection>()?;
     m.add_class::<PyCursor>()?;
     m.add_function(wrap_pyfunction!(connect, m)?)?;

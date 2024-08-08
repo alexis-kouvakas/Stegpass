@@ -11,5 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.86"
 chrono = "0.4.38"
-pyo3 = { version = "0.22.0", features = ["anyhow"] }
+pyo3 = { version = "0.22.0", features = ["anyhow", "chrono"] }
 rusqlite = { version = "0.32.1", features = ["sqlcipher"] }
