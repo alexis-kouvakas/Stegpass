@@ -1,0 +1,15 @@
+[package]
+name = "sqlcipher-py"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "sqlcipher_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.86"
+chrono = "0.4.38"
+pyo3 = { version = "0.22.0", features = ["anyhow"] }
+rusqlite = { version = "0.32.1", features = ["sqlcipher"] }
