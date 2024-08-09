@@ -1,12 +1,13 @@
 mod types;
+use delegate::delegate;
 use pyo3::prelude::*;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
-use pyo3::types::PySequence;
-use rusqlite::Connection;
+use rusqlite::{Connection, ToSql};
 use rusqlite::Error::SqliteFailure;
+use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 create_exception!(sqlcipher, Warning, PyException);
 create_exception!(sqlcipher, Error, PyException);
@@ -18,18 +19,35 @@ create_exception!(sqlcipher, IntegrityError, DatabaseError);
 create_exception!(sqlcipher, ProgrammingError, DatabaseError);
 create_exception!(sqlcipher, NotSupportedError, DatabaseError);
 
+struct PyConnectionCore {
+    connection: Connection,
+}
+
+impl PyConnectionCore {
+    fn new(connection: Connection) -> PyConnectionCore {
+        // TODO: Check if connection is good before returning struct
+        PyConnectionCore { connection }
+    }
+
+    delegate! {
+        to self.connection {
+            pub fn execute<P: rusqlite::Params>(&self, sql: &str, params: P) -> rusqlite::Result<usize>;
+            pub fn prepare(&self, sql: &str) -> rusqlite::Result<rusqlite::Statement<'_>>;
+            pub fn close(self);
+        }
+    }
+}
+
 /// Connection to an SQLite database.
 ///
 /// Note: rusqlite::Connection does implement Send, but
 /// currently can't figure out how to store Connection safely.
 #[pyclass(unsendable, module="sqlcipher", name="Connection")]
-struct PyConnection {
-    connection: Rc<Connection>,  // rusqlite::Connection does not implement Sync (https://github.com/rusqlite/rusqlite/issues/188)
-}
+struct PyConnection(Rc<RefCell<PyConnectionCore>>);
 
 impl PyConnection {
-    fn new(conn: Connection) -> Self {
-        PyConnection { connection: Rc::new(conn) }
+    fn new(pyconn_ref: Rc<RefCell<PyConnectionCore>>) -> PyConnection {
+        PyConnection(pyconn_ref)
     }
 }
 
@@ -48,9 +66,38 @@ impl PyConnection {
     }
 
     #[pyo3(signature = (as_dict=false))]
-    fn cursor<'py>(&self, as_dict: bool) -> PyResult<PyCursor> {
-        Ok(PyCursor::new(Rc::clone(&self.connection), as_dict))
+    fn cursor(&self, as_dict: bool) -> PyResult<PyCursor> {
+        Ok(PyCursor::new(Rc::downgrade(&self.0), as_dict))
     }
+
+    #[pyo3(signature = (query, params_opt=None))]
+    fn execute(&self, query: &str, params_opt: Option<Bound<'_, PyAny>>) -> PyResult<i32> {
+        let inner = self.0.try_borrow().map_err(|_| PyException::new_err("could not access connection object"))?;
+        let statement = inner.prepare(query).map_err(|_| PyException::new_err("could not prepare query"))?;
+        if let Some(params) = params_opt {
+            todo!()
+        }
+        /*
+        let statement = inner.
+            match err {
+                SqliteFailure(err, msg_opt) => {
+                    let code = err.extended_code;
+                    if let Some(msg) = msg_opt {
+                        DatabaseError::new_err(format!("encountered error code {code} while preparing query: {msg}"))
+                    } else {
+                        DatabaseError::new_err(format!("encountered error code {code} while preparing query"))
+                    }
+                },
+                _ => Error::new_err("could not prepare query")
+            }
+        })?;
+        */
+        Ok(0)
+    }
+}
+
+fn process_python_params(params: Bound<'_, PyAny>) -> PyResult<Vec<Box<dyn ToSql>>> {
+    todo!()
 }
 
 #[pyclass(unsendable, module="sqlcipher", name="Cursor")]
@@ -61,11 +108,11 @@ struct PyCursor {
     rowcount: u32,
     closed: bool,
     as_dict: bool,
-    connection: Rc<Connection>,  // rusqlite::Connection does not implement Sync (https://github.com/rusqlite/rusqlite/issues/188),
+    connection: Weak<RefCell<PyConnectionCore>>,  // rusqlite::Connection does not implement Sync (https://github.com/rusqlite/rusqlite/issues/188),
 }
 
 impl PyCursor {
-    fn new(connection: Rc<Connection>, as_dict: bool) -> Self {
+    fn new(connection: Weak<RefCell<PyConnectionCore>>, as_dict: bool) -> Self {
         PyCursor {
             description: None,
             rowcount: 0,
@@ -81,28 +128,6 @@ impl PyCursor {
     fn close(&mut self) {
         self.closed = true;
     }
-
-    #[pyo3(signature = (query, params=None))]
-    fn execute(&mut self, query: &str, params: Option<Bound<'_, PySequence>>) -> PyResult<()> {
-        if self.closed {
-            Err(InterfaceError::new_err("cursor is closed"))
-        } else {
-            let statement = self.connection.prepare(query).map_err(|err| {
-                match err {
-                    SqliteFailure(err, msg_opt) => {
-                        let code = err.extended_code;
-                        if let Some(msg) = msg_opt {
-                            DatabaseError::new_err(format!("encountered error code {code} while preparing query: {msg}"))
-                        } else {
-                            DatabaseError::new_err(format!("encountered error code {code} while preparing query"))
-                        }
-                    },
-                    _ => Error::new_err("could not prepare query")
-                }
-            })?;
-            Ok(())
-        }
-    }
 }
 
 fn as_pathbuf<'py>(obj: &Bound<'py, PyAny>) -> PyResult<PathBuf> {
@@ -113,7 +138,7 @@ fn as_pathbuf<'py>(obj: &Bound<'py, PyAny>) -> PyResult<PathBuf> {
 #[pyfunction]
 fn connect(#[pyo3(from_py_with = "as_pathbuf")] filename: PathBuf) -> PyResult<PyConnection> {
     match Connection::open(&filename) {
-        Ok(conn) => Ok(PyConnection::new(conn)),
+        Ok(conn) => Ok(PyConnection::new(Rc::new(RefCell::new(PyConnectionCore::new(conn))))),
         Err(e) => match e {
             SqliteFailure(err, msg_opt) => {
                 let code = err.extended_code;
@@ -131,7 +156,7 @@ fn connect(#[pyo3(from_py_with = "as_pathbuf")] filename: PathBuf) -> PyResult<P
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn sqlcipher<'py>(m: &Bound<'py, PyModule>) -> PyResult<()> {
+fn sqlcipher(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use crate::types::*;
     m.add("apilevel", "2.0")?;
     m.add("threadsafety", 0)?;
